@@ -1,0 +1,36 @@
+# FILE NAMES
+assign name = file_name c.val="ramo_potential_map-PX1"
+assign name = log_file_name c.val="${file_name}"
+
+# DEVICE SIMULATION (ATLAS) -------------------------------------------
+go atlas simflags="-P 8"
+
+# LOAD STRUCTURE
+mesh inf="atlas_pixels_vacuum_3D.str"
+# METHODS
+method direct carriers=0
+
+# SOLVE
+# output file with I,V,C of electric terminals
+log outf="$'log_file_name'.log"
+# initialize the solution
+solve init
+
+assign name = solve_str c.val="vstep=0.1 vfinal=1 name=PX1"
+solve $solve_str 
+
+assign name = save_file c.val="${file_name}-1.str"
+
+save outf="${save_file}"
+
+# EXTRACT
+extract init inf="${save_file}"
+extract 3d.conc.file material="Silicon" impurity="Potential" outfile="$'file_name'_guardring-potential.dat"
+
+extract init inf="$'log_file_name'.log"
+extract name="hv.dat" curve( v."PX1",i."PX1" ) outfile="$'file_name'_PX1_Current.dat"
+### extracting total integrated recombination rate
+MEASURE U.TOTAL
+
+
+quit
