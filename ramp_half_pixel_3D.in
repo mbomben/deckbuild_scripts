@@ -1,0 +1,65 @@
+## fluence
+set fluence=0
+## temperature
+set temperature=258.15
+## deep levels
+set Ed=0.48
+set Ea=0.525
+## oxide surface charge (cm-2)
+if cond=($fluence>0)
+  set ox_surf_charge=3.0e12
+  set ox_edge_charge=${ox_surf_charge}
+else
+  set ox_surf_charge=5.0e10
+  set ox_edge_charge=5.0e10
+if.end
+## surf velocity
+set surf_velocity=5
+
+
+## OXIDE CHARGE
+assign name = interface_flags1 c.val="Qf=$'ox_surf_charge'"
+assign name = interface_flags2 c.value = "S.N=${surf_velocity} S.P=${surf_velocity}"
+#
+
+
+go atlas simflags="-P 8"
+mesh inf="../fei4-200um.str"
+
+# interface properties
+interface $interface_flags1
+interface $interface_flags2
+
+# 2-level model for radiation-induced bulk damage
+if cond=($fluence>0)
+set Nd = 6*${fluence}
+set Na = 0.8*${Nd}
+set sign=1e-14
+set sigp=0.4*${sign}
+trap acceptor e.level=${Ea} density=${Na} degen=1 sign=${sign} sigp=${sigp}
+trap donor e.level=${Ed} density=${Nd} degen=1 sign=${sign} sigp=${sigp}
+if.end
+
+
+
+models bipolar temperature="$'temperature'" print
+material material=silicon taun0=1e-4 taup0=1e-4 EG300=1.11
+#impact selb
+method PAM.MPI
+output charge traps.ft e.velocity h.velocity
+
+log outf=half_pixel_3D.log
+solve init
+solve vfinal=-1.0 vstep=-0.1 name="HV"
+save outf=half_pixel_3D-1.sta
+solve vfinal=-1.0 vstep=-0.5 name="HV"
+save outf=half_pixel_3D-5.sta
+solve vfinal=-30.0 vstep=-0.5 name="HV"
+save outf=half_pixel_3D-30.sta
+solve vfinal=-50.0 vstep=-0.5 name="HV"
+save outf=half_pixel_3D-50.sta
+solve vfinal=-80.0 vstep=-0.5 name="HV"
+save outf=half_pixel_3D-80.sta
+solve vfinal=-100.0 vstep=-0.5 name="HV"
+save outf=half_pixel_3D-100.sta
+quit
