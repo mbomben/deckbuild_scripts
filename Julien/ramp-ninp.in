@@ -1,0 +1,197 @@
+##PARAMETERS DEFINITION -----------------------------------------------
+#
+set fluence=0
+#
+set surf_velocity=5
+#
+# BULK PARAMETERS ----------------------------------------------
+# bulk dopant concentration/cm3 (>0: p-type, <0: n-type)
+set bulk_impurities_conc=3e12
+#
+#
+#
+## oxide surface charge (cm-2)
+if cond=($fluence>0)
+  set ox_surf_charge=1.0e12
+  set ox_edge_charge=${ox_surf_charge}
+else
+  set ox_surf_charge=1.0e11
+  set ox_edge_charge=1.0e11
+if.end
+#
+#
+#
+#
+#
+## DEVICE SIMULATION PARAMETERS ---------------------------------
+## final bias voltage
+if cond=($fluence>0)
+  set dvbias=100
+  set nbiassteps=10
+  set vbias=${nbiassteps}*${dvbias}
+else
+  set dvbias=50
+  set nbiassteps=10
+  set vbias=${nbiassteps}*${dvbias}
+if.end
+# ambient temperature (K)
+if cond=($fluence>0)
+  set temperature=254.00
+else
+  set temperature=300.00
+if.end
+# ramp either pixel or back
+set HVtoback=1
+#
+#
+# PHYSICAL MODELS
+assign name = models_flags c.val="bipolar temperature=$temperature print"
+assign name = impact_flags c.val="selb"
+#
+#
+## OXIDE CHARGE
+assign name = interface_flags1 c.val="Qf=$'ox_surf_charge' y.min=-0.7 y.max=0.0"
+assign name = interface_flags2 c.value = "S.N=${surf_velocity} S.P=${surf_velocity}"
+#
+# NUMERICAL METHODS
+assign name = method_flags c.val="newton"
+#
+#
+# QUANTITIES (IN ADDITION TO DEFAULT ONES) TO BE STORED IN OUTPUT STRUCTURE FILE (.str)
+assign name = output_flags c.val="charge e.velocity ex.velocity ey.velocity h.velocity hx.velocity hy.velocity h.mobility e.mobility"
+#
+#
+# DO WE WANT TO PERFORM AN AC ANALYSIS FOR CAPACITANCE EXTRACTION?
+# do simply IV
+# assign name = solve_flags c.val=" "
+# do IV + CV
+assign name = solve_flags c.val="AC.ANALYSIS QSCV Frequency=1e4"
+
+#
+# SET FILE NAME
+if cond = ($bulk_impurities_conc < 0)
+	assign name = file_name c.val="ninn_fei4_3pixels_fluence=${fluence}_bias=${vbias}_RD50"
+else
+	assign name = file_name c.val="ninp_fei4_3pixels_fluence=${fluence}_bias=${vbias}_RD50"
+if.end
+
+# SET LOG FILE NAME
+if cond = ($bulk_impurities_conc < 0)
+	assign name = log_file_name c.val="ninn_fei4_3pixels_fluence=${fluence}_RD50"
+else
+	assign name = log_file_name c.val="ninp_fei4_3pixels_fluence=${fluence}_RD50"
+if.end
+
+
+# DEVICE SIMULATION (ATLAS) -------------------------------------------
+go atlas simflags="-P 8"
+
+
+mesh inf="/data-silvaco/mbomben/RD50/Hartmut_noMult/Perugia-diode-ninp-200um-better-electrode.str"
+
+#quit
+
+  
+# 3-level model for radiation-induced bulk damage
+if cond=($fluence>0)
+  if cond = ($bulk_impurities_conc < 0)
+    ### n-type bulk
+    set d1=13*$fluence
+    set d2=0.08*$fluence
+    set d3=1.1*$fluence
+    trap acceptor e.level=0.42 density=$d1 degen=1 sign=2e-15 sigp=1.2e-14
+    trap acceptor e.level=0.50 density=$d2 degen=1 sign=5e-15 sigp=3.5e-14
+    trap donor e.level=0.36 density=$d3 degen=1 sign=2e-18 sigp=2.5e-15
+  else
+    ### p-type bulk - Pennicard
+    source /home/mbomben/work/Silvaco/irr_models/p-bulk-low-fluence-Petasecca-2015.in
+  if.end
+if.end
+
+
+# MODELS, IMPACT, INTERFACE & METHOD
+models $models_flags
+impact $impact_flags
+
+interface $interface_flags1
+interface $interface_flags2
+
+
+### altering default recombination lifetime for bulk
+MATERIAL material=Silicon TAUP0=4.0e-5 TAUN0=4.0e-5 M.VTHN=3.274714e-01 M.VTHP=5.592999e-01
+
+method $method_flags
+output $output_flags
+
+# SOLVE
+# output file with I,V,C of electric terminals
+log outf="$'log_file_name'.log"
+# initialize the solution
+solve init
+
+set bias = 0
+
+loop steps=${nbiassteps}
+
+  if cond=($fluence>0)
+  
+    set bias = ${bias} + ${dvbias}
+    assign name = solve_str c.val="vstep=-5.00 vfinal=-${bias} name=HV"
+    solve $solve_str $solve_flags
+  
+    assign name = save_file c.val="${file_name}-${bias}.str"
+  
+    save outf="${save_file}"
+    extract init infile="${save_file}"
+    extract name="Electric field" curve(depth,impurity="Electric field" material="Silicon" \
+        x.val=0.0) outfile="EField-curve-${bias}V.dat"
+
+
+  else
+  
+    set bias = ${bias} + ${dvbias}
+    assign name = solve_str c.val="vstep=-1.00 vfinal=-${bias} name=HV"
+    solve $solve_str $solve_flags
+  
+    assign name = save_file c.val="${file_name}-${bias}.str"
+  
+    save outf="${save_file}"
+    extract init infile="${save_file}"
+    extract name="Electric field" curve(depth,impurity="Electric field" material="Silicon" \
+        x.val=0.0) outfile="EField-curve-${bias}V.dat"
+
+
+  if.end
+
+l.end
+
+
+
+  
+
+
+
+# EXTRACT
+extract init inf="${save_file}"
+extract 2d.conc.file material="Silicon" impurity="Net Doping" outfile="$'file_name'_Doping.dat"
+extract 2d.conc.file material="Silicon" impurity="E Field" outfile="$'file_name'_EField.dat"
+extract 2d.conc.file material="Silicon" impurity="Electron Conc" outfile="$'file_name'_eConc.dat"
+extract 2d.conc.file material="Silicon" impurity="Hole Conc" outfile="$'file_name'_hConc.dat"
+extract 2d.conc.file material="Silicon" impurity="Potential" outfile="$'file_name'_Potential.dat"
+extract 2d.conc.file material="Silicon" impurity="Total Current Density" outfile="$'file_name'_Current.dat"
+extract 2d.conc.file material="Silicon" impurity="Potential" x.min=0 x.max=$bulk_width y.min=$bulk_depth y.max=$bulk_depth outfile="$'file_name'_guardring-potential.dat"
+
+extract init inf="$'log_file_name'.log"
+extract name="hv.dat" curve( v."HV",i."HV" ) outfile="$'file_name'_HV_Current.dat"
+extract name="hv.dat" curve( v."HV",i."PAD" ) outfile="$'file_name'_PAD_Current.dat"
+extract name="hvint.dat" curve( vint."HV",i."HV" ) outfile="$'file_name'_HVint_Current.dat"
+extract name="cv.dat" curve( v."HV",c."PAD""HV" ) outfile="$'file_name'_CV.dat"
+extract curve(abs(v."HV"),(abs(c."PAD""HV"))^-2) outf="$'file_name'_C2V.dat"
+extract curve(log10(abs(v."HV")),log10(abs(c."PAD""HV"))) outf="$'file_name'_logClogV.dat"
+#extract curve(-v."HV",(c."HV""HV")^-2) outf="$'file_name'_C-2V.dat"
+#extract curve(log10(-v."HV"),log10(-c."HV""HV")) outf="$'file_name'_logClogV.dat"
+### extracting total integrated recombination rate
+MEASURE U.TOTAL
+
+
+quit
