@@ -70,16 +70,16 @@ assign name = solve_flags c.val="AC.ANALYSIS QSCV Frequency=1e4"
 #
 # SET FILE NAME
 if cond = ($bulk_impurities_conc < 0)
-	assign name = file_name c.val="ninn_fei4_3pixels_fluence=${fluence}_bias=${vbias}_RD50"
+	assign name = file_name c.val="ninn_fei4_3pixels_fluence_${fluence}neqcm2_bias_${vbias}V_RD50"
 else
-	assign name = file_name c.val="ninp_fei4_3pixels_fluence=${fluence}_bias=${vbias}_RD50"
+	assign name = file_name c.val="ninp_fei4_3pixels_fluence_${fluence}neqcm2_bias_${vbias}V_RD50"
 if.end
 
 # SET LOG FILE NAME
 if cond = ($bulk_impurities_conc < 0)
-	assign name = log_file_name c.val="ninn_fei4_3pixels_fluence=${fluence}_RD50"
+	assign name = log_file_name c.val="ninn_fei4_3pixels_fluence_${fluence}ineqcm2_RD50"
 else
-	assign name = log_file_name c.val="ninp_fei4_3pixels_fluence=${fluence}_RD50"
+	assign name = log_file_name c.val="ninp_fei4_3pixels_fluence_${fluence}neqcm2_RD50"
 if.end
 
 
@@ -111,7 +111,7 @@ if.end
 
 # MODELS, IMPACT, INTERFACE & METHOD
 models $models_flags
-impact $impact_flags
+#impact $impact_flags
 
 interface $interface_flags1
 interface $interface_flags2
@@ -139,7 +139,7 @@ loop steps=${nbiassteps}
     assign name = solve_str c.val="vstep=-5.00 vfinal=-${bias} name=HV"
     solve $solve_str $solve_flags
   
-    assign name = save_file c.val="${file_name}-${bias}.str"
+    assign name = save_file c.val="${file_name}-${bias}V.str"
   
     save outf="${save_file}"
     extract init infile="${save_file}"
@@ -153,7 +153,7 @@ loop steps=${nbiassteps}
     assign name = solve_str c.val="vstep=-1.00 vfinal=-${bias} name=HV"
     solve $solve_str $solve_flags
   
-    assign name = save_file c.val="${file_name}-${bias}.str"
+    assign name = save_file c.val="${file_name}-${bias}V.str"
   
     save outf="${save_file}"
     extract init infile="${save_file}"
