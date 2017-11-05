@@ -1,17 +1,15 @@
-##PARAMETERS DEFINITION -----------------------------------------------
-#
-set fluence=1e15
-#
-set bias = 500
-#
-set surf_velocity=5
-#
-# BULK PARAMETERS ----------------------------------------------
-# bulk dopant concentration/cm3 (>0: p-type, <0: n-type)
-set bulk_impurities_conc=5e11
-#
-#
-#
+## fluence
+set fluence=1e14
+## bias point
+set bias = 150
+### entry_point
+set x_entry_point = 5 
+set y_entry_point = 60
+## temperature
+set temperature=263.15
+## deep levels
+set Ed=0.48
+set Ea=0.525
 ## oxide surface charge (cm-2)
 if cond=($fluence>0)
   set ox_surf_charge=3.0e12
@@ -20,132 +18,54 @@ else
   set ox_surf_charge=1.0e11
   set ox_edge_charge=1.0e11
 if.end
-#
-#
-#
-#
-#
-## DEVICE SIMULATION PARAMETERS ---------------------------------
-## final bias voltage
-if cond=($fluence>0)
-  set dvbias=100
-  set nbiassteps=5
-  set vbias=${nbiassteps}*${dvbias}
-else
-  set dvbias=50
-  set nbiassteps=10
-  set vbias=${nbiassteps}*${dvbias}
-if.end
-# ambient temperature (K)
-if cond=($fluence>0)
-  set temperature=253.15
-else
-  set temperature=253.15
-if.end
-#set temperature=400.00
-# ramp either pixel or back
-set HVtoback=1
-#
-#
-# PHYSICAL MODELS
-assign name = models_flags c.val="bipolar temperature=$temperature print"
-assign name = impact_flags c.val="selb"
-#
-#
+## surf velocity
+set surf_velocity=5
+
+
 ## OXIDE CHARGE
-assign name = interface_flags1 c.val="Qf=$'ox_surf_charge' y.min=-0.7 y.max=0.0"
-assign name = interface_flags2 c.value = "S.N=${surf_velocity} S.P=${surf_velocity}"
+assign name = interface_flags1 c.val="Qf=$'ox_surf_charge' x.min=1"
+assign name = interface_flags2 c.val="Qf=$'ox_edge_charge' x.max=1"
+assign name = interface_flags3 c.value = "S.N=${surf_velocity} S.P=${surf_velocity}"
 #
-# NUMERICAL METHODS
-assign name = method_flags c.val="gummel newton climit=1e-5 "
-#
-#
-# QUANTITIES (IN ADDITION TO DEFAULT ONES) TO BE STORED IN OUTPUT STRUCTURE FILE (.str)
-assign name = output_flags c.val="charge e.velocity ex.velocity ey.velocity h.velocity hx.velocity hy.velocity h.mobility e.mobility"
-#
-#
-# DO WE WANT TO PERFORM AN AC ANALYSIS FOR CAPACITANCE EXTRACTION?
-# do simply IV
-assign name = solve_flags c.val=" "
-# do IV + CV
-# assign name = solve_flags c.val="AC.ANALYSIS QSCV Frequency=1e4"
-
-#
-# SET FILE NAME
-if cond = ($bulk_impurities_conc < 0)
-	assign name = file_name c.val="ninn_fei4_3pixels_fluence=${fluence}_bias=${vbias}_RD50"
-else
-	assign name = file_name c.val="ninp_fei4_3pixels_fluence=${fluence}_bias=${vbias}_RD50"
-if.end
-
-# SET LOG FILE NAME
-if cond = ($bulk_impurities_conc < 0)
-	assign name = log_file_name c.val="ninn_fei4_3pixels_fluence=${fluence}_RD50"
-else
-	assign name = log_file_name c.val="ninp_fei4_3pixels_fluence=${fluence}_RD50"
-if.end
 
 
-# DEVICE SIMULATION (ATLAS) -------------------------------------------
 go atlas simflags="-P 8"
+mesh inf="/home/mbomben/ds/ramo/atlas_pixels_3d/half_pixel/FEI4/fei4-200um-Neff1.64e12-nospray.str"
 
-mesh inf="/data-silvaco/mbomben/RD50/Hartmut/FEI4-3Pixels-ninp-200um-Hartmut6.str"
-
-#quit
-
-  
-# 3-level model for radiation-induced bulk damage
-if cond=($fluence>0)
-  if cond = ($bulk_impurities_conc < 0)
-    ### n-type bulk
-    set d1=13*$fluence
-    set d2=0.08*$fluence
-    set d3=1.1*$fluence
-    trap acceptor e.level=0.42 density=$d1 degen=1 sign=2e-15 sigp=1.2e-14
-    trap acceptor e.level=0.50 density=$d2 degen=1 sign=5e-15 sigp=3.5e-14
-    trap donor e.level=0.36 density=$d3 degen=1 sign=2e-18 sigp=2.5e-15
-  else
-    ### p-type bulk - Pennicard
-    source /home/mbomben/work/Silvaco/irr_models/p-bulk-low-fluence-Petasecca-2015.in
-  if.end
-if.end
-
-
-# MODELS, IMPACT, INTERFACE & METHOD
-models $models_flags
-impact $impact_flags
-
+# interface properties
 interface $interface_flags1
 interface $interface_flags2
+interface $interface_flags3
+
+# 2-level model for radiation-induced bulk damage
+if cond=($fluence>0)
+trap acceptor e.level=${Ea} density=0.36e15 degen=1 sign=6.6e-15 sigp=1.65e-15
+trap donor e.level=${Ed} density=0.50e15 degen=1 sign=6.60e-15 sigp=6.60e-15
+if.end
 
 
-### altering default recombination lifetime for bulk
-MATERIAL material=Silicon TAUP0=4.0e-5 TAUN0=4.0e-5 EG300=1.11 
+models bipolar temperature="$'temperature'" print
+material material=silicon taun0=1e-5 taup0=1e-5
+method PAM.MPI
+impact selb
 
-method $method_flags
-output $output_flags
+set file_name="half_pixel_3D"
 
-# SOLVE
-# output file with I,V,C of electric terminals
-log outf="$'log_file_name'.log"
-# load previous solution
-load infile= "../${file_name}-${bias}.str" master
-# initialize the solution
+set log_file_name="half_pixel_3D"
+log outf="${log_file_name}.log"
+load infile="../${file_name}-${bias}.sta" master
 solve prev
 
 method halfimplicit
-  
+
 # Specify the charge track: normal incidence through the drain
-singleeventupset entry="0.0,0" exit="0,200" pcunits b.density=1.14e-4 \
+singleeventupset entry="${x_entry_point},${y_entry_point},0" exit="${x_entry_point},${y_entry_point},200" pcunits b.density=1.14e-4 \
                  radialgauss radius=5  t0=2.e-11 tc=0
 # Log file for transient
-assign name = log_file_name c.val="$'log_file_name'-SEU" 
+assign name = log_file_name c.val="$'log_file_name'-SEU"
 log outf="$'log_file_name'.log"
-assign name = file_name c.val="$'file_name'-SEU" 
+assign name = file_name c.val="$'file_name'-SEU"
 
-# Early transient
-#method lte.timestep tstep.incr=1.25 dt.max=2.0e-13
-#solve tfinal=2.0e-12 tstep=2.5e-15 prev
 
 ## seu peak
 #method constant.timestep
@@ -154,68 +74,65 @@ save outf="$'file_name'-before-seu.str"
 #
 ## Response to particle strike
 #method lte.timestep tstep.incr=1.25 dt.max=2.5e-11
-solve tfinal=5e-11 tstep=1.0e-12 prev
+solve tfinal=3e-11 tstep=1.5e-12 prev
 save outf="$'file_name'-during-seu.str"
 #
-## during second particle strike
+## after 50 ps
 #method lte.timestep tstep.incr=1.25 dt.max=2.5e-11
-solve tfinal=7e-11 tstep=1.0e-12 prev
-save outf="$'file_name'-after-70ps.str"
+solve tfinal=5e-11 tstep=2.5e-12 prev
+save outf="$'file_name'-after-50ps.str"
 #
-#
-## Response to second particle strike
-#method lte.timestep tstep.incr=1.25 dt.max=2.5e-11
-solve tfinal=8e-11 tstep=1.0e-12 prev
-save outf="$'file_name'-after-80ps.str"
-#
-## Response to particles strikes
-#method lte.timestep tstep.incr=1.25 dt.max=2.5e-11
-solve tfinal=9e-11 tstep=1.0e-12 prev
-save outf="$'file_name'-after-90ps.str"
 #
 ## after 100 ps
 #method lte.timestep tstep.incr=1.25 dt.max=2.5e-11
-solve tfinal=1e-10 tstep=1.0e-12 prev
+solve tfinal=1e-10 tstep=5.0e-12 prev
 save outf="$'file_name'-after-100ps.str"
 #
-## after 150 ps
-#method lte.timestep tstep.incr=1.25 dt.max=2.5e-11
-solve tfinal=1.5e-10 tstep=1.0e-12 prev
-save outf="$'file_name'-after-150ps.str"
 #
 ## after 200 ps
 #method lte.timestep tstep.incr=1.25 dt.max=2.5e-11
-solve tfinal=2.0e-10 tstep=1.0e-12 prev
-save outf="$'file_name'-after-150ps.str"
+solve tfinal=2.0e-10 tstep=1.0e-11 prev
+save outf="$'file_name'-after-200ps.str"
+#
+## after 500 ps
+solve tfinal=5.0e-10 tstep=2.5e-11 prev
+save outf="$'file_name'-after-500ps.str"
 #
 ## after 1 ns
-#method constant.timestep
-solve tfinal=1e-9 tstep=2.0e-12 prev
+solve tfinal=1e-9 tstep=5.0e-11 prev
 save outf="$'file_name'-after-1ns.str"
 #
 ## after 5 ns
 #method constant.timestep
-solve tfinal=4e-9 tstep=2.0e-12 prev
+solve tfinal=5e-9 tstep=2.5e-10 prev
 save outf="$'file_name'-after-5ns.str"
 #
 ## after 25 ns
 #method constant.timestep
-solve tfinal=25e-9 tstep=2.0e-12 prev
+solve tfinal=25e-9 tstep=1.25e-9 prev
 save outf="$'file_name'-after-25ns.str"
 #
-## Convergence to final steady state
-#method lte.timestep tstep.incr=1.25 dt.max=2.0e-6
-solve tfinal=1e-6 tstep=5.0e-10  prev
+## after 50 ns
+#method constant.timestep
+solve tfinal=5e-8 tstep=2.5e-9 prev
+save outf="$'file_name'-after-50ns.str"
 #
-# Save the final state of the structure, after the upset
-save outf="$'file_name'-final.str"
+#
+## after 100 ns
+#method constant.timestep
+solve tfinal=1e-7 tstep=5e-9 prev
+save outf="$'file_name'-after-100ns.str"
+#
 
 
 
 assign name = file_name c.val="${log_file_name}"
 extract init inf="$'log_file_name'.log"
-extract name="hv.dat" curve( time, i."PAD" ) outfile="$'file_name'_PAD_Current.dat"
-
+extract name="hv.dat" curve( time, i."PX1" ) outfile="$'file_name'_PX1_Current.dat"
 
 quit
+
+
+
+
 
