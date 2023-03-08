@@ -1,0 +1,5 @@
+go internal
+load infile=extract_E.in
+log outfile=extract_E_z
+sweep parameter = z type = linear range=0,100,101
+quit
