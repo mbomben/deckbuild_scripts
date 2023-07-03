@@ -1,0 +1,13 @@
+GO victorymesh simflags="-P 4"
+
+LOAD in=
+
+# Cut out 2D plane (xy plane) at z=
+CUTPLANE axis="z" offset=
+
+SAVE out=
+
+# Extract potential
+assign name = file_name c.val=
+extract init inf="${file_name}.str"
+extract 2d.conc.file material="Vacuum" impurity="Potential" outfile="$'file_name'_Potential.dat"
